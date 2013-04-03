@@ -16,6 +16,7 @@ int get_size(char *c)
 
 void parse_string(size_t size)
 {
+	int is_new_string = 1;
 	size_t counter = 0;
 	size_t count_of_write = 0;
 	size_t count_to_read = 0;
@@ -25,7 +26,7 @@ void parse_string(size_t size)
 	size_t read_counter = 1;
 	while (read_counter > 0)
 	{
-		read_counter = read(0, buffer, size);
+		read_counter = read(0, buffer + count_to_read, size - count_to_read);
 		counter = read_counter + count_to_read;
 		count_of_write = 0;
 		i = 0;
@@ -33,17 +34,29 @@ void parse_string(size_t size)
 		{
 			if (buffer[i] == '\n')
 			{
-				write(1, buffer, i + 1);
-				write(1, buffer, i + 1);
-				count_of_write = i + 1;	
+				if (is_new_string)
+				{
+					write(1, buffer + count_of_write, i - count_of_write + 1);
+					write(1, buffer + count_of_write, i - count_of_write + 1);
+					count_of_write = i + 1;
+				} else {
+					count_of_write = i + 1;
+					is_new_string = 1;
+				}
 			}
 		i++;
 		}
-		count_to_read = counter - count_of_write;
-		memcpy(temp_buf, buffer + count_of_write, count_to_read);
-		buffer = malloc(size);
-		memcpy(buffer, temp_buf, count_to_read);
-		temp_buf = malloc(size);
+		if (count_of_write != 0)
+		{
+			count_to_read = counter - count_of_write;
+			memcpy(temp_buf, buffer + count_of_write, count_to_read);
+			buffer = malloc(size);
+			memcpy(buffer, temp_buf, count_to_read);
+			temp_buf = malloc(size);
+		} else {
+			buffer = malloc(size);
+			is_new_string = 0;
+		}
 	}
 }
 int main(int argc, char *argv[]) {
