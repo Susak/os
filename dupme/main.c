@@ -20,6 +20,8 @@ int get_size(char *c)
 
 void parse_string(size_t size)
 {
+	char *buf_new_line = malloc(1);
+	buf_new_line[0] = '\n';
 	bool is_new_string = true;
 	size_t counter = 0;
 	size_t count_of_write = 0;
@@ -64,8 +66,16 @@ void parse_string(size_t size)
 			count_to_read = counter;
 		}	
 	}
+	if (is_new_string && count_to_read < size)
+	{
+		write(1, buffer, count_to_read);
+		write(1, buf_new_line, 1);
+		write(1, buffer, count_to_read);
+		write(1, buf_new_line, 1);	
+	}
 }
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 	size_t size = get_size(argv[1]);
 	parse_string(size + 1);
 	return 0;
