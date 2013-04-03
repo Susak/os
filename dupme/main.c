@@ -17,11 +17,21 @@ int get_size(char *c)
 void parse_string(size_t size)
 {
 	char *buffer = malloc(size);
+	size_t i = 0;
 	size_t read_counter = 1;
 	while (read_counter > 0)
 	{
 		read_counter = read(0, buffer, size);
-		write(1, buffer, read_counter);
+		i = 0;
+		while ( i < read_counter)
+		{
+			if (buffer[i] == '\n')
+			{
+				write(1, buffer, i + 1);
+				write(1, buffer, i + 1);	
+			}
+		i++;
+		}
 	}
 }
 int main(int argc, char *argv[]) {
