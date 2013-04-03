@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define true 1
+#define false 0
+typedef int bool;
+
 int get_size(char *c)
 {
 	int answ = 0;
@@ -16,7 +20,7 @@ int get_size(char *c)
 
 void parse_string(size_t size)
 {
-	int is_new_string = 1;
+	bool is_new_string = true;
 	size_t counter = 0;
 	size_t count_of_write = 0;
 	size_t count_to_read = 0;
@@ -30,7 +34,7 @@ void parse_string(size_t size)
 		counter = read_counter + count_to_read;
 		count_of_write = 0;
 		i = 0;
-		while ( i < read_counter)
+		while ( i < counter)
 		{
 			if (buffer[i] == '\n')
 			{
@@ -41,10 +45,10 @@ void parse_string(size_t size)
 					count_of_write = i + 1;
 				} else {
 					count_of_write = i + 1;
-					is_new_string = 1;
+					is_new_string = true;
 				}
 			}
-		i++;
+			i++;
 		}
 		if (count_of_write != 0)
 		{
@@ -53,10 +57,12 @@ void parse_string(size_t size)
 			buffer = malloc(size);
 			memcpy(buffer, temp_buf, count_to_read);
 			temp_buf = malloc(size);
-		} else {
+		} else if(counter == size) {
 			buffer = malloc(size);
-			is_new_string = 0;
-		}
+			is_new_string = false;
+		} else {
+			count_to_read = counter;
+		}	
 	}
 }
 int main(int argc, char *argv[]) {
