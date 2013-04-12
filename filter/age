@@ -1,0 +1,16 @@
+#!/bin/bash
+TWO_DAY="2"
+FIVE_DAY="5"
+LAST=`stat -c %Z $1`
+DATE=`date +%s`
+
+(( SUB=(DATE - LAST)/24/60/60 ))
+
+if [ $SUB -gt $FIVE_DAY ]
+then
+   exit 1
+elif [ $SUB -ge $TWO_DAY ]
+then
+    exit 0
+fi
+exit 1 
