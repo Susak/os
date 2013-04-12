@@ -41,7 +41,7 @@ int main (int argc, char *argv[]) {
         }
     } 
     char * buffer = malloc(size + 1);
-    char *strings[argc + 1 - optind];
+    char ** strings = malloc(argc + 1 - optind);
     int k = optind;
     for (; k < argc; k++)
     {
