@@ -8,6 +8,7 @@ do
    sleep "$update_time"
    echo "$current"
    after_sleep=`$process`
-   current=$after_sleep
+   DIFF="$(diff -u <(echo "$current") <(echo "$after_sleep"))"
+   echo "$DIFF" 
+   current="$after_sleep"
    done
-
