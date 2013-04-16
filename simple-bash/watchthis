@@ -1,0 +1,13 @@
+#!/bin/bash
+update_time="$1"
+shift
+process="$@"
+current=`$process`
+while true
+do
+   sleep "$update_time"
+   echo "$current"
+   after_sleep=`$process`
+   current=$after_sleep
+   done
+
