@@ -6,14 +6,11 @@ f() {
         if [[ -d "$cur_dir" ]] 
         then
             f "$cur_dir"/*
-        elif [[ -f "$cur_dir" ]]
-        then
-              echo "$cur_dir"
-           if [[ ! -e "$cur_dir" && ! -f "$cur_dir" ]]
-           then
-              echo "$cur_dir"
-          fi 
         fi
+        if [[ ! -e "$cur_dir" && ! -f "$cur_dir" ]]
+        then
+            echo "$cur_dir"
+        fi 
     done
 }
 
