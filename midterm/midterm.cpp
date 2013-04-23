@@ -29,10 +29,6 @@ void run_command(char * buf[], char *string, size_t sz) {
     int fork_val = fork();
     int child_status;
     if (fork_val == 0) {
-        /*int fd;
-        dup2(0, fd);
-        _write(fd, string, sz);
-        close(fd);*/
         execvp(buf[0], buf);
         exit(0); 
     } else {
