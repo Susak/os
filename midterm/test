@@ -1,0 +1,35 @@
+#!/bin/bash
+
+line_lengt="1000"
+counter="100"
+zero=0
+res_line=""
+
+declare -a Alphabet
+Alphabet=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
+num_words=${#Alphabet[*]}
+
+while [ "$counter" -gt "$zero" ]
+do
+    length=$((RANDOM%$line_lengt))
+    while [ "$length" -gt "$zero" ]
+    do
+        line=${line}"${Alphabet[$((RANDOM%num_words))]}"
+        line=${line}"/"
+        res_line=${res_line}"/"
+        let "length -= 1"
+    done
+    my_res=$(echo -ne "$line""\n" | ./midterm echo)
+    if [ "$res_line" != "$my_res" ]
+    then
+        echo "correct result $res_line"
+        echo "my result $my_res"
+        echo "fail"
+        exit 0
+    fi
+    let "counter -= 1"
+    line=""
+    res_line=""
+done
+echo "Tests passed"
+exit 0

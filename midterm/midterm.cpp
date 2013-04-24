@@ -9,7 +9,7 @@ int find_delim(char *buf, char delim, size_t sz)
 {
     int i = 0;
     for (; i <= sz; i++) {
-        if (buf[i] == delim)
+        if (buf[i] == delim || buf[i] == 0)
             return i + 1;
     }
     return -1;
@@ -94,5 +94,6 @@ int main(int argc, char *argv[]) {
         command_buffer[argc - 1] = ret_pair.second;
         run_command(command_buffer, ret_pair.second, ret_pair.first);
         memmove(buf, buf + delim_pos, count_of_write);
+        return 0;
     }
 }
