@@ -2,11 +2,10 @@
 
 for cur_name in "$@"
 do
-    echo "Current name: $cur_name\n"
-    echo "Write new name: "
-    read -e new_name
-    if [ "$new_name" ]
-    then
+    if [[ -f $cur_name ]]; then
+        read -e -p "Edit name: " -i "$cur_name" new_name
+    fi
+    if [ "$new_name" ]; then
         mv "$cur_name" "$new_name"
     fi
 done
