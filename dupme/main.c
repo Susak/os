@@ -55,7 +55,7 @@ void parse_string(size_t size)
                 _exit(2);
             memcpy(buffer, temp_buf, count_to_read);
             temp_buf = malloc(size);
-            if (buffer == NULL)
+            if (temp_buf == NULL)
                 _exit(2);
         } else if(counter == size) {
             buffer = malloc(size);
