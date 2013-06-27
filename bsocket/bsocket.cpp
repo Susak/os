@@ -19,17 +19,13 @@
 struct multiheadqueue {
     std::vector<char> buffer;
     std::vector<int> pos;
-    std::vector<int> ref;
     int size;
     multiheadqueue() {
         pos.push_back(0);
-        int size = 0;
+        size = 0;
     }
-    void add(std::string &a) {
-        for (int i = 0; i < a.size(); i++) {
-            buffer.push_back(a[i]);
-            ref.push_back(pos.size());
-        }
+    void add(std::string a) {
+        std::copy(a.begin(), a.end(), std::back_inserter(buffer));
         size += a.size();
     }
 
@@ -48,6 +44,7 @@ struct multiheadqueue {
         std::vector<char> tmp(buffer.size());
         tmp.insert(tmp.begin(), buffer.begin() + min_i,  buffer.end());
         tmp.swap(buffer);
+        size -= min;
     }
 };
 std::string get_str(int a) {
@@ -56,17 +53,40 @@ std::string get_str(int a) {
     convert << a;
     return convert.str();
 }
-std::string parse_sr(std::vector<char> &a) {
-    auto it = std::find(a.begin(), a.end(), ' ');
-    it++;
-    int num = atoi(std::string(a.begin(), it).data());
-    std::cerr << num << "\n";
-    std::vector<char> tmp(a.size());
-    std::string res(it, it + num);
-    res.push_back('\0');
-    tmp.insert(tmp.begin(), it + num,  a.end());
-    a.swap(tmp);
-    return res;
+std::pair<std::vector<std::string>, int> 
+    parse_sr(std::vector<char> &a, int read_c) {
+    bool full_message = true;
+    int in_buff = 0;
+    std::vector<std::string> res;
+    std::cerr << "Our buffer " << a.data() << std::endl;
+    for (int i = 0; i < read_c; i++) {
+        if (a[i] == ' ') {
+            int num = atoi(std::string(a.begin(),
+                        a.begin() + i).data());
+            std::cerr << "num " << num << std::endl;
+            if (num > read_c - i - 1) {
+                full_message = false;
+                break;
+            }
+            auto beg = a.begin() + i + 1;
+            std::string temp(beg, beg + num);
+            std::cerr << temp << " " << read_c <<std::endl;
+            res.push_back(std::string(beg, beg + num));
+            std::cerr << res.size() << " SIZE\n";
+            std::vector<char> tmp(a.size());
+            tmp.insert(tmp.begin(), beg + num, a.end());
+            a = std::move(tmp);
+            in_buff += (i + 1 + num);
+            read_c -= (i + 1 + num);
+            i = 0;
+        }
+    }
+    if ((full_message == true) && (read_c > 0)) {
+        std::vector<char> tmp(a.size());
+        in_buff += read_c;
+        a = std::move(tmp);
+    }
+    return std::make_pair(res, in_buff);
 }
 std::vector<std::string > parse_buffer(std::vector<char> a,
         char delim, int sz) {
@@ -119,6 +139,7 @@ int main (int argc, char *argv[]) {
         psfd[0].fd = sfd;
         psfd[0].events = POLLIN;
         std::vector<std::string> info(1);
+        std::vector<int> message_len(1);
         while (true) {
             int pol_val = poll(psfd.data(), psfd.size(), -1);
             if (pol_val > 0) {
@@ -135,8 +156,10 @@ int main (int argc, char *argv[]) {
                     temp_poll.events = POLLIN | POLLOUT;
                     temp_poll.fd = sockfd;
                     psfd.push_back(temp_poll);
-                    queue.pos.push_back(0);
+                    queue.pos.push_back(queue.size);
+                    std::cerr << queue.size << std::endl;
                     buffer.push_back(std::vector<char>(sz));
+                    message_len.push_back(0);
                     std::cerr << "Connected " << sockfd << std::endl;
                 }
 
@@ -144,16 +167,17 @@ int main (int argc, char *argv[]) {
                     if (psfd[i].revents & POLLIN) {
                         int cur_read = 0;
                         int read_c = 1;
-                        std::cerr << "write\n";
-                            read_c= read(psfd[i].fd,buffer[i].data() +
-                                    cur_read, sz - cur_read);
+                            read_c = read(psfd[i].fd,buffer[i].data() +
+                                    message_len[i], sz - message_len[i]);
                             if (read_c < 0)
                                 _exit(2);
-                            cur_read += read_c;
-                            std::string cur_mes = info[i] + 
-                                parse_sr(buffer[i]);
-                            std::cerr << cur_mes << std::endl;
-                            queue.add(cur_mes);
+                            message_len[i] += read_c;
+                            std::pair<std::vector<std::string>, int> cur_mes =
+                                parse_sr(buffer[i], message_len[i]);
+                            message_len[i] -= cur_mes.second;
+                            for (int j = 0; j < cur_mes.first.size(); j++) {
+                                queue.add(info[i] + cur_mes.first[j]);
+                            }
                     }
                 }
 
@@ -167,7 +191,6 @@ int main (int argc, char *argv[]) {
                         }
                         int wr = write(psfd[i].fd, queue.buffer.data() +
                                 queue.pos[i], cur_len);
-                        write(psfd[i].fd, "\n", 1);
                         queue.pos[i] += wr;
                     }
                 }
