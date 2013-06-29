@@ -2,12 +2,14 @@
 #include<stdlib.h>
 #include<vector>
 #include<sstream>
+#include<sys/wait.h>
 #include<string>
 #include<sys/types.h>
 #include<memory.h>
 #include<sys/socket.h>
 #include<netdb.h>
 #include<poll.h>
+#include<signal.h>
 #include<stdio.h>
 #include<iostream>
 #include<map>
@@ -58,21 +60,16 @@ std::pair<std::vector<std::string>, int>
     bool full_message = true;
     int in_buff = 0;
     std::vector<std::string> res;
-    std::cerr << "Our buffer " << a.data() << std::endl;
     for (int i = 0; i < read_c; i++) {
         if (a[i] == ' ') {
             int num = atoi(std::string(a.begin(),
                         a.begin() + i).data());
-            std::cerr << "num " << num << std::endl;
             if (num > read_c - i - 1) {
                 full_message = false;
                 break;
             }
             auto beg = a.begin() + i + 1;
-            std::string temp(beg, beg + num);
-            std::cerr << temp << " " << read_c <<std::endl;
             res.push_back(std::string(beg, beg + num));
-            std::cerr << res.size() << " SIZE\n";
             std::vector<char> tmp(a.size());
             tmp.insert(tmp.begin(), beg + num, a.end());
             a = std::move(tmp);
@@ -101,10 +98,21 @@ std::vector<std::string > parse_buffer(std::vector<char> a,
     }
     return res;
 }
+int pid;
+void handler(int) {
+    if (pid) {
+        kill(pid, SIGINT);
+    }
+}
 int main (int argc, char *argv[]) {
     if (argc < 2)
         _exit(1);
-    if (fork() == 0) {
+    pid = fork();
+    if (pid) {
+        signal(SIGINT, &handler);
+        wait(NULL);
+        return 0;
+    } else {
         setsid();
         int sz = 4096;
         std::vector<std::vector<char>> buffer(1);
@@ -153,24 +161,32 @@ int main (int argc, char *argv[]) {
                     sockfd = accept(sfd,
                             (struct sockaddr *) &client, &addr_sz);
                     struct pollfd temp_poll;
-                    temp_poll.events = POLLIN | POLLOUT;
+                    temp_poll.events = POLLIN | POLLOUT | POLLRDHUP;
                     temp_poll.fd = sockfd;
                     psfd.push_back(temp_poll);
                     queue.pos.push_back(queue.size);
-                    std::cerr << queue.size << std::endl;
                     buffer.push_back(std::vector<char>(sz));
                     message_len.push_back(0);
                     std::cerr << "Connected " << sockfd << std::endl;
                 }
 
                 for (int i = 1; i < psfd.size(); i++) {
-                    if (psfd[i].revents & POLLIN) {
-                        int cur_read = 0;
-                        int read_c = 1;
-                            read_c = read(psfd[i].fd,buffer[i].data() +
+                    if ((psfd[i].revents & POLLIN) ||
+                            psfd[i].revents & POLLRDHUP) {
+                            if (psfd[i].revents & POLLRDHUP) {
+                                close(psfd[i].fd);
+                                psfd.erase(psfd.begin() + i,
+                                        psfd.begin() + i + 1);
+                                continue;
+                            }
+                            int read_c = read(psfd[i].fd,buffer[i].data() +
                                     message_len[i], sz - message_len[i]);
-                            if (read_c < 0)
-                                _exit(2);
+                            if (read_c < 0) {
+                                close(psfd[i].fd);
+                                psfd.erase(psfd.begin() + i,
+                                        psfd.begin() + i + 1);
+                                continue;
+                            }
                             message_len[i] += read_c;
                             std::pair<std::vector<std::string>, int> cur_mes =
                                 parse_sr(buffer[i], message_len[i]);
@@ -185,12 +201,18 @@ int main (int argc, char *argv[]) {
                     if ((psfd[i].revents & POLLOUT) && 
                             queue.pos[i] < queue.buffer.size()) {
                         int cur_len = sz;
-                        if (queue.buffer.size() - queue.pos.size() < sz) {
+                        if (queue.buffer.size() - queue.pos[i] < cur_len) {
                             cur_len = queue.buffer.size()
                                 - queue.pos[i];
                         }
                         int wr = write(psfd[i].fd, queue.buffer.data() +
                                 queue.pos[i], cur_len);
+                        if (wr < 0) {
+                            close(psfd[i].fd);
+                            psfd.erase(psfd.begin() + i, 
+                                    psfd.begin() + i + 1);
+
+                        }
                         queue.pos[i] += wr;
                     }
                 }
