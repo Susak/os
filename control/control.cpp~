@@ -1,0 +1,101 @@
+#include<unistd.h>
+#include<functional>
+#include<stdlib.h>
+#include<time.h>
+#include<string>
+#include<vector>
+#include<fcntl.h>
+#include<iostream>
+#include<iterator>
+#include<algorithm>
+#include<sstream>
+
+#define my_function std::function<void(std::vector<int>, std::vector<int>) 
+
+std::vector<std::string > parse_buffer(std::vector<char> a,
+        char delim) {
+    auto it = std::find(a.begin(), a.end(), delim);
+    std::vector<std::string > res;
+    while (it != a.end()) {
+        it++;
+        res.push_back(std::string(a.begin(), it));
+        a.erase(a.begin(), it);
+        it = std::find(a.begin(), a.end(), delim);
+    }
+    return res;
+}
+class fan {
+    std::string name;
+
+};
+
+int return_number(std::string &a) {
+    return atoi(a.data());
+}
+std::string int_to_str(int num) {
+    std::ostringstream ss;
+    ss << num;
+    return ss.str();
+}
+
+void fill_numbers(std::vector<std::string> &information,
+        int result_speed, int fd) {
+    for (int i = 0; i < information.size(); i++) {
+        if (information[i].find("in") != std::string::npos) {
+            information[i] += int_to_str(result_speed) + '\n';
+        }
+        if (information[i].find("temp") != std::string::npos) {
+            information[i] += int_to_str(std::abs(rand() % 100)) + '\n';
+        }
+        write(fd, information[i].data(), information[i].size());
+    }
+}
+int get_new_speed(std::string &a) {
+
+}
+int main() {
+    if (fork() == 0) {
+        std::string files[4] = {
+        "/sys/class/hwmon/hwmon0/temp1_input",
+        "/sys/class/hwmon/hwmon0/temp2_input",
+        "/sys/class/hwmon/hwmon0/device/fan1_input",
+        "/sys/class/hwmon/hwmon0/device/fan2_input" };
+        setsid();
+        int size = 4096;
+        std::vector<std::string> information;
+        while (true) {
+            int fd = open(files[0].data(), O_RDONLY);
+            if (fd < 0) {
+                _exit(1);
+            }
+            std::vector<char> buf(size);
+            int read_couter = read(fd, buf.data(), size);
+            if (read_couter < 0) {
+                _exit(1);
+            }
+            information = parse_buffer(buf, '\n');
+            /*int temp_devices = 0;
+            int temperature = 0;
+            int speed = 0;
+            for (int i = 0; i < information.size(); i++) {
+                if (information[i].find("in") != std::string::npos) {
+                    speed = return_number(information[i]);
+                }
+                if (information[i].find("temp") != std::string::npos) {
+                    temperature += return_number(information[i]);
+                    temp_devices++;
+                }
+            }
+            int new_speed = get_new_speed(temperature, temp_devices);
+            close(fd);
+            fd = open("information.txt", O_WRONLY | O_CREAT, 0644);
+            fill_numbers(information, new_speed, fd);
+            close(fd);*/
+            std::cout << return_number(information[0]);
+            close(fd);
+            break;
+        }
+        return 0;
+    }
+    return 0;
+}

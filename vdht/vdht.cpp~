@@ -13,13 +13,13 @@
 #include<algorithm>
 
 std::vector<std::string > parse_buffer(std::vector<char> a,
-        char delim, int sz) {
-    a[sz - 1] = ' ';
+        char delim) {
+    a.push_back(' ');
     auto it = std::find(a.begin(), a.end(), delim);
     std::vector<std::string > res;
     while (it != a.end()) {
-        res.push_back(std::string(a.begin(), it));
         it++;
+        res.push_back(std::string(a.begin(), it));
         a.erase(a.begin(), it);
         it = std::find(a.begin(), a.end(), delim);
     }
@@ -30,6 +30,7 @@ int main (int argc, char *argv[]) {
         _exit(1);
     std::map<int, std::vector<std::string> > history;
     std::vector<int> my_clients;
+    std::vector<char> buffer(4096);
     for (int i = 2; i < argc; i++) {
            struct addrinfo hints;
            struct addrinfo *result, *rp;
@@ -70,7 +71,7 @@ int main (int argc, char *argv[]) {
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
-    if (getaddrinfo(NULL, argv[1], &hints, &res)) {
+    if (getaddrinfo(NULL, myport, &hints, &res)) {
         perror("error getaddrinfo");
     }
     int sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
@@ -94,11 +95,15 @@ int main (int argc, char *argv[]) {
     pfd[0].events = poll_init;
     pfd[1].events = poll_init;
     pfd[1].fd = 0;
+    if (rp == NULL) {
+        std::cerr << "Could not bind" << std::endl;
+        exit(EXIT_FAILURE);
+    }
     for (int i = 2; i < pfd.size(); i++) {
         pfd[i].fd = my_clients[i];
         pfd[i].events = poll_init | POLLOUT;
     }
- 
+    
     while (true) {
         int poll_val = poll(pfd.data(), pfd.size(), -1);
         if (poll_val > 0) {
@@ -120,18 +125,17 @@ int main (int argc, char *argv[]) {
             if (pfd[1].revents & POLLIN) {
                 int read_c = 1;
                 int cur_read = 0;
-                std::vector<char> buffer(4096);
                 read_c = read(0, buffer.data() + cur_read,
                             buffer.size() - cur_read);
                 cur_read += read_c;
-                std::vector<std::string> command = 
-                    parse_buffer(buffer, ' ', cur_read);
+                std::vector<std::string> command = parse_buffer(buffer, ' ');
+                std::cout << command[0] << "FFFFFF ";
+
                 if (command[0] == "print") {
                     int num = atoi(command[1].data());
                     for (int i = 0; i < history[num].size(); i++) {
-                        write(2, history[num][i].data(),
+                        write(1, history[num][i].data(),
                                 history[num][i].size());
-                        std::cerr << std::endl;
                     }
                 }
                 if (command[0] == "change") {
@@ -148,8 +152,7 @@ int main (int argc, char *argv[]) {
                                 }
                             }
                         } else {
-                            write(2, "collision", 9);
-                            std::cerr << std::endl;
+                            write(1, "collision", 9);
                         }
                     }
                 }
@@ -177,7 +180,6 @@ int main (int argc, char *argv[]) {
                 if (pfd[i].revents & POLLIN) {
                     int read_c = 1;
                     int cur_read = 0;
-                    std::vector<char> buffer(4096);
                     while (read_c > 0) {
                         read_c = read(pfd[i].fd, buffer.data() + cur_read,
                                 buffer.size() - cur_read);
@@ -186,8 +188,7 @@ int main (int argc, char *argv[]) {
                             _exit(7);
                         }
                     }
-                    std::vector<std::string> command = 
-                        parse_buffer(buffer, ' ', cur_read);
+                    std::vector<std::string> command = parse_buffer(buffer, ' ');
                     if (command[0] == "change") {
                         int num = atoi(command[1].data());
                         if (history[num][history[num].size() - 1]
@@ -202,8 +203,7 @@ int main (int argc, char *argv[]) {
                                     }
                                 }
                             } else {
-                                write(2, "collision", 9);
-                                std::cerr << std::endl;
+                                write(1, "collision", 9);
                             }
                         }
                     }

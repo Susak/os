@@ -1,0 +1,6 @@
+in 360
+temp1 90
+temp2 59
+temp3 63
+
+

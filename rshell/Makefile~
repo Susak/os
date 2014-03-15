@@ -1,0 +1,2 @@
+all:
+	g++ rshell.c -o rshell

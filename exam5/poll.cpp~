@@ -1,0 +1,288 @@
+#include <sys/types.h>
+#include <wait.h>
+#include <boost/optional.hpp>
+#include <iterator>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <vector>
+#include <signal.h>
+#include <algorithm>
+#include <poll.h>
+#include <iostream>
+
+#define BUF_SIZE 500
+
+using namespace std;
+
+const int sz = 4096;
+
+void panic(const char * msg)
+{
+    perror(msg);
+    exit(EXIT_FAILURE);
+}
+
+void safe_write(int fd, vector<char> &buf, int read_cout)
+{
+    int written = 0;
+    while(written < read_cout)
+    {
+        int write_count = write(fd, buf.data(), read_cout - written);
+        if (write_count < 0)
+            panic("Error in write");
+        written += write_count;
+    } 
+}
+
+int parse(vector<char> & buf) 
+{
+    for (int i = 0; i < buf.size(); i++)
+    {
+        if (buf[i] == '\n')
+            return i;
+    }
+    return -1;
+}
+int pid;
+void h(int signal)
+{
+    if (pid) {
+        kill(pid, SIGINT);
+    }
+}
+struct client {
+    vector<char> to_read;
+    vector<char> to_write;
+    int shift_r;
+    int shift_w;
+    bool end;
+
+    client() : to_read(sz), to_write(), shift_r(0), shift_w(0), end(false) {}
+
+    void resize() {
+        to_read.resize(sz);
+    }
+
+    bool client_read(int fd)
+    {
+        int read_count = read(fd,
+                to_read.data() + shift_r,
+                to_read.size() - shift_r);
+        if (read_count < 0)
+        {
+            return false;
+        }
+
+        if (read_count == 0)
+        {
+            end = true;
+        }
+
+        shift_r += read_count;
+        return true;
+    }
+
+    bool client_write(int fd)
+    {
+        int write_count = write(fd, to_write.data(),
+                shift_w);
+
+        if (write_count < 0)
+        {
+            return false;
+        }
+
+        shift_w -= write_count;
+        to_write.erase(to_write.begin(),
+                to_write.begin() + write_count);
+        resize();
+
+        return true;
+
+    }
+
+    bool is_end()
+    {
+        return end && shift_w == 0;
+    }
+
+};
+
+boost::optional<vector<char> > try_system(client &tmp)
+{
+    int pos = parse(tmp.to_read);
+    if (pos != -1)
+    {
+        vector<char> temp_buf(tmp.to_read.begin(),
+                tmp.to_read.begin() + pos);
+        temp_buf.push_back(0);
+        tmp.to_read.erase(tmp.to_read.begin(),
+                tmp.to_read.begin() + pos + 1);
+        tmp.shift_r -= pos + 1;
+        tmp.resize();
+        return boost::optional<vector<char> >(temp_buf);
+    }
+    return boost::optional<vector<char> >();
+
+}
+
+static void sigchld_hdl (int sig)
+{
+	while (waitpid(-1, NULL, WNOHANG) > 0) {
+	}
+}
+int main(int argc, char *argv[])
+{
+    pid = fork();
+    if (pid == -1)
+    {
+        panic("Error on fork");
+    }
+    if (pid)
+    {
+        signal(SIGINT, h);
+        wait(NULL);
+        return 0;
+    }
+    setsid();
+    struct addrinfo hints, *res;
+    struct sockaddr_storage sock_stor;
+
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    if (getaddrinfo(NULL, argv[1], &hints, &res)) {//argv[1] - port
+        panic("error getaddrinfo");
+    }
+
+    int sfd = socket(res->ai_family, res->ai_socktype, 
+            res->ai_protocol);
+
+    if (sfd == -1) {
+        panic("error socket");
+    }
+
+    int optval = 1;
+
+    if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &optval,
+                sizeof(int)) == -1)    {
+        panic("error setsockopt");
+    }
+
+    if (bind(sfd, res->ai_addr, res->ai_addrlen) == -1) {
+        panic("error bind");
+    }
+
+    if (listen(sfd, 5) == -1) {
+        panic("error listen");
+    }
+    freeaddrinfo(res);
+
+    vector<client> clients(1, client());
+    vector<struct pollfd> pfd(1);
+    pfd[0].fd = sfd;
+    pfd[0].events = POLLIN;
+
+    while (true)
+    {
+        int pol_val = poll(pfd.data(), pfd.size(), -1);
+        if (pol_val == -1)
+        {
+            panic("Error in poll");
+        }
+        if (pol_val > 0)
+        {
+            if (pfd[0].revents & POLLIN)
+            {
+                int sockfd;
+                sockaddr_in clientc;
+
+                clientc.sin_family = AF_INET;
+                socklen_t addr_sz = sizeof(sock_stor);
+                sockfd = accept(sfd,
+                        (struct sockaddr *) &clientc, &addr_sz);
+                if (sockfd == -1)
+                    panic("error accept");
+                struct pollfd temp_poll;
+                temp_poll.events = POLLIN | POLLRDHUP;
+                temp_poll.fd = sockfd;            
+                pfd.push_back(temp_poll);
+                clients.push_back(client());
+                std::cout << "Client accepted!" << std::endl;
+            }
+            for (int i = 1; i < pfd.size(); i++)
+            {
+                client &tmp = clients[i];
+                if ((pfd[i].revents & POLLIN) ||
+                        (pfd[i].revents & POLLRDHUP))
+                {
+                    if (pfd[i].revents & POLLRDHUP)
+                    {
+                        pfd.erase(pfd.begin() + i);
+                        clients.erase(clients.begin() + i);
+                    }
+                    cout << "Client " << i << "something write\n";
+                    
+                    if (!tmp.client_read(pfd[i].fd))
+                    {
+                        pfd.erase(pfd.begin() + i);
+                        clients.erase(clients.begin() + i);
+                        continue;
+                    }
+                }
+                if (tmp.shift_w > 0) {
+                    cout << "here";
+                    pfd[i].events |= POLLOUT;
+                }
+                if (pfd[i].revents & POLLOUT)
+                {
+
+                    if (!tmp.client_write(pfd[i].fd) || tmp.is_end())
+                    {
+                        pfd.erase(pfd.begin() + i);
+                        clients.erase(clients.begin() + i);
+                        continue;
+                    }
+
+                }
+
+                if (tmp.shift_w == 0) {
+                    pfd[i].events &= ~POLLOUT;
+                }
+                boost::optional<vector<char> > parse_str = try_system(tmp);
+                if (parse_str.is_initialized())
+                {
+                    int fork_val = fork();
+                    if (fork_val == -1)
+                    {
+                        panic("Error on fork");
+                    }
+                    if (fork_val == 0) 
+                    {
+                        if (dup2(pfd[i].fd, 1) == -1 ||
+                            dup2(pfd[i].fd, 2) == -1) 
+                        {
+                            panic("Error in dup2");
+                        }
+                        vector<char> tmp_v = parse_str.get();
+                        if (system(tmp_v.data()) == -1)
+                        {
+                            panic("Error on calling system");
+                        }
+                        tmp.to_write.push_back('O');
+                        tmp.shift_w = 1;
+                        return 0;
+                    } else {
+                       //wait(NULL); 
+                    }
+                }
+            }
+        }
+    }
+}
